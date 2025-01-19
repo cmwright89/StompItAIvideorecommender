@@ -371,15 +371,7 @@ def get_top_recommendations(df_filtered, selected_params, models, encoders, feat
         param_options['category'] = sorted(
             [x for x in df_filtered['category'].unique() if str(x) != 'nan' and x != 'NA'])
 
-    # Function to get valid topics based on category
-    def get_topics_for_category(cat):
-        if cat == 'All':
-            # Get all unique topics across categories
-            return sorted(list(set([topic for topics in CATEGORY_TOPICS.values() for topic in topics])))
-        return get_valid_topics(cat)
-
     # Generate combinations of flexible parameters
-    # Build lists of values to try for each flexible parameter
     param_values = {}
     for param in flexible_params:
         if param == 'main topic':
@@ -405,45 +397,127 @@ def get_top_recommendations(df_filtered, selected_params, models, encoders, feat
                     final_params['main topic'] = topic
 
                     try:
+                        # Get historical data for weighting
+                        historical = df_filtered[
+                            (df_filtered['category'] == final_params['category']) &
+                            (df_filtered['format'] == final_params['format'])
+                            ]
+                        hist_weight = 1.0
+                        if len(historical) > 0:
+                            hist_weight += (len(historical) / 10)  # Add 0.1 for each historical video
+
                         # Prepare features and get predictions
                         features = prepare_features(df_filtered, final_params, encoders, feature_cols)
                         predictions = get_predictions(features, models)
-                        # Get duration recommendation
                         duration_recommendation = analyze_optimal_duration(df_filtered, final_params)
 
                         recommendations.append({
                             'parameters': final_params,
                             'predictions': predictions,
-                            'duration': duration_recommendation
+                            'duration': duration_recommendation,
+                            'format': final_params['format'],
+                            'level': final_params['level'],
+                            'combined_score': (
+                                    (predictions['views'] / 100000) * hist_weight +
+                                    (predictions['likes_ratio']) * hist_weight +
+                                    (predictions['comments_ratio']) * hist_weight
+                            )
                         })
                     except Exception as e:
                         continue  # Skip invalid combinations
             else:
                 try:
+                    # Get historical data for weighting
+                    historical = df_filtered[
+                        (df_filtered['category'] == params['category']) &
+                        (df_filtered['format'] == params['format'])
+                        ]
+                    hist_weight = 1.0
+                    if len(historical) > 0:
+                        hist_weight += (len(historical) / 10)  # Add 0.1 for each historical video
+
                     # Prepare features and get predictions
                     features = prepare_features(df_filtered, params, encoders, feature_cols)
                     predictions = get_predictions(features, models)
-                    # Get duration recommendation
                     duration_recommendation = analyze_optimal_duration(df_filtered, params)
 
                     recommendations.append({
                         'parameters': params,
                         'predictions': predictions,
-                        'duration': duration_recommendation
+                        'duration': duration_recommendation,
+                        'format': params['format'],
+                        'level': params['level'],
+                        'combined_score': (
+                                (predictions['views'] / 100000) * hist_weight +
+                                (predictions['likes_ratio']) * hist_weight +
+                                (predictions['comments_ratio']) * hist_weight
+                        )
                     })
                 except Exception as e:
                     continue  # Skip invalid combinations
     else:
         # If no flexible parameters, just predict for the fixed parameters
-        features = prepare_features(df_filtered, fixed_params, encoders, feature_cols)
-        predictions = get_predictions(features, models)
-        duration_recommendation = analyze_optimal_duration(df_filtered, fixed_params)
-        recommendations.append({
-            'parameters': fixed_params,
-            'predictions': predictions,
-            'duration': duration_recommendation
-        })
+        try:
+            # Get historical data for weighting
+            historical = df_filtered[
+                (df_filtered['category'] == fixed_params['category']) &
+                (df_filtered['format'] == fixed_params['format'])
+                ]
+            hist_weight = 1.0
+            if len(historical) > 0:
+                hist_weight += (len(historical) / 10)  # Add 0.1 for each historical video
 
-    # Sort by predicted views and get top n
-    recommendations.sort(key=lambda x: x['predictions']['views'], reverse=True)
-    return recommendations[:n_recommendations]
+            features = prepare_features(df_filtered, fixed_params, encoders, feature_cols)
+            predictions = get_predictions(features, models)
+            duration_recommendation = analyze_optimal_duration(df_filtered, fixed_params)
+
+            recommendations.append({
+                'parameters': fixed_params,
+                'predictions': predictions,
+                'duration': duration_recommendation,
+                'format': fixed_params['format'],
+                'level': fixed_params['level'],
+                'combined_score': (
+                        (predictions['views'] / 100000) * hist_weight +
+                        (predictions['likes_ratio']) * hist_weight +
+                        (predictions['comments_ratio']) * hist_weight
+                )
+            })
+        except Exception as e:
+            pass  # Skip if there's an error
+
+    # Sort by combined score initially
+    recommendations.sort(key=lambda x: x['combined_score'], reverse=True)
+
+    # Get diverse recommendations
+    diverse_recommendations = []
+    seen_formats = set()
+    seen_levels = set()
+
+    # First, add the absolute best recommendation
+    if recommendations:
+        diverse_recommendations.append(recommendations[0])
+        seen_formats.add(recommendations[0]['format'])
+        seen_levels.add(recommendations[0]['level'])
+
+    # Then add other recommendations prioritizing diversity
+    for rec in recommendations[1:]:
+        # Skip if we already have enough recommendations
+        if len(diverse_recommendations) >= n_recommendations:
+            break
+
+        # Add recommendation if it has a new format or new level
+        if (rec['format'] not in seen_formats or
+                rec['level'] not in seen_levels):
+            diverse_recommendations.append(rec)
+            seen_formats.add(rec['format'])
+            seen_levels.add(rec['level'])
+
+    # If we still need more recommendations, fill with next best options
+    while len(diverse_recommendations) < n_recommendations and len(diverse_recommendations) < len(recommendations):
+        for rec in recommendations:
+            if rec not in diverse_recommendations:
+                diverse_recommendations.append(rec)
+                break
+
+    return diverse_recommendations
