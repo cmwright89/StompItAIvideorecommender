@@ -349,6 +349,9 @@ def analyze_optimal_duration(df, params):
         'confidence': confidence
     }
 
+def get_topics_for_category(category):
+    """Get valid topics for a given category (alias for get_valid_topics)."""
+    return get_valid_topics(category)
 
 def get_top_recommendations(df_filtered, selected_params, models, encoders, feature_cols, n_recommendations=3):
     """Generate top n video parameter combinations and their predictions based on user-selected parameters."""
