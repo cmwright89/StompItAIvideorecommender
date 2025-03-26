@@ -4,7 +4,7 @@ A machine learning-powered recommendation tool that helps predict the best video
 
 ## 📋 Overview
 
-This Streamlit application helps Stomp It Tutorials optimize their YouTube video parameters by leveraging machine learning predictions based on historical performance data. The tool analyzes past video metrics and suggests optimal combinations of video parameters (category, format, topic, level) to maximize views, likes, and engagement.
+This Streamlit application helps Stomp It Tutorials optimize video parameters for the creation of new channel videos by leveraging machine learning predictions based on historical performance data. The tool analyzes past video metrics and suggests optimal combinations of video parameters (category, format, topic, level) to maximize views, likes, and engagement.
 
 ## ✨ Features
 
