@@ -82,4 +82,4 @@ The application uses three trained machine learning models to predict different 
 
 ---
 
-*Created for Stomp It YouTube channel content optimization*
+*Created for Stomp It Tutorials' Youtube channel content optimization*
